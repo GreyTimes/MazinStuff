@@ -8,8 +8,6 @@ import javafx.application.Application;
 import javafx.beans.property.DoubleProperty;
 import javafx.beans.property.SimpleDoubleProperty;
 import javafx.embed.swing.SwingFXUtils;
-import javafx.geometry.Insets;
-import javafx.geometry.Pos;
 import javafx.scene.Scene;
 import javafx.scene.control.*;
 import javafx.scene.image.WritableImage;
@@ -28,8 +26,6 @@ import model.MazeThemeConfig;
 
 import view.*;
 
-import generator.*;
-import solver.*;
 import game.Player;
 
 import javax.imageio.ImageIO;
@@ -57,9 +53,9 @@ public class MazeGeneratorApp extends Application {
 
     // APPLICATION STATE
 
+    private MazeGenerationController generationController;
     private MazeGrid grid;
     private MazeCanvas mazeCanvas;
-    private Timeline animTimeline;
     private Timeline movementTimeline;
     private Label statsLabel;
     private ComboBox<String> algorithmCombo;
@@ -81,526 +77,530 @@ public class MazeGeneratorApp extends Application {
     private javafx.scene.control.TextField seedTextField;
     private long currentSeed = System.currentTimeMillis();
 
-// APPLICATION START
+    // APPLICATION START
 
+    @Override
     public void start(Stage primaryStage) {
-        primaryStage.setTitle("Customizable JavaFX Maze Generator & Solver");
+
+        primaryStage.setTitle(
+                "Customizable JavaFX Maze Generator & Solver"
+        );
+
+
+        // --------------------------------------------------
+        // INITIALIZE APPLICATION COMPONENTS
+        // --------------------------------------------------
 
         mazeCanvas = new MazeCanvas(
                 CANVAS_SIZE,
                 CANVAS_SIZE
         );
 
-        // INITIALIZE THEME CONFIG
         final MazeThemeConfig themeConfig = MazeThemeConfig.load();
+
         mazeCanvas.setThemeConfig(themeConfig);
 
-        // TOPOLOGY SELECTION
 
-        Label shapeHeader = new Label("Maze Layout Shape:");
-        Label shapeInfo = createInfoIcon("Choose rectangular, circular/polar, hexagonal, or triangular geometry.");
-        shapeCombo = new ComboBox<>();
-        shapeCombo.getItems().addAll(TopologyType.values());
-        shapeCombo.setValue(TopologyType.RECTANGULAR);
-        shapeCombo.setMaxWidth(Double.MAX_VALUE);
+        // --------------------------------------------------
+        // BUILD USER INTERFACE
+        // --------------------------------------------------
 
-        // ENTRANCE / EXIT MODE SELECTION
-
-        Label entranceExitHeader = new Label("Entrance / Exit Mode:");
-        Label entranceExitInfo = createInfoIcon(
-                "Left to Right: start on the left and finish on the right. "
-                        + "Top to Bottom: start at the top and finish at the bottom. "
-                        + "Center to Outer Edge: available for circular mazes. "
-                        + "Custom: click two cells after generation to select START and END."
+        MazeUIBuilder uiBuilder = new MazeUIBuilder(
+                mazeCanvas,
+                currentSeed,
+                themeConfig.isDarkMode()
         );
 
-        entranceExitModeCombo = new ComboBox<>();
-        entranceExitModeCombo.setMaxWidth(Double.MAX_VALUE);
-        openingStatusLabel = new Label("The selected mode will be applied when you generate a maze.");
-        openingStatusLabel.setWrapText(true);
-        openingStatusLabel.setMaxWidth(Double.MAX_VALUE);
-        configureEntranceExitModeOptions(shapeCombo.getValue());
+        MazeUIBuilder.Controls controls =
+                uiBuilder.getControls();
 
-        // GENERATION ALGORITHM SELECTION
+        Scene scene = uiBuilder.getScene();
 
-        Label algoHeader = new Label("Gen Algorithm:");
-        Label algoInfo = createInfoIcon(
-                "DFS creates long winding corridors. Prim's and Kruskal's "
-                        + "produce branched mazes. Aldous-Broder and Wilson's "
-                        + "generate uniform spanning trees."
+
+        // --------------------------------------------------
+        // CONNECT UI CONTROLS TO APPLICATION
+        // --------------------------------------------------
+
+        // MAZE EDITOR
+
+        shapeCombo = controls.shapeCombo();
+
+        entranceExitModeCombo =
+                controls.entranceExitModeCombo();
+
+        openingStatusLabel =
+                controls.openingStatusLabel();
+
+        algorithmCombo =
+                controls.algorithmCombo();
+
+        solverCombo =
+                controls.solverCombo();
+
+        showSolutionToggle =
+                controls.showSolutionToggle();
+
+        seedTextField =
+                controls.seedTextField();
+
+
+        // GAMEPLAY
+
+        playModeToggle =
+                controls.playModeToggle();
+
+        fogOfWarToggle =
+                controls.fogOfWarToggle();
+
+
+        // FILE / APPEARANCE
+
+        themeToggle =
+                controls.themeToggle();
+
+        statsLabel =
+                controls.statsLabel();
+
+
+        // SLIDERS
+
+        Slider widthSlider =
+                controls.widthSlider();
+
+        Slider heightSlider =
+                controls.heightSlider();
+
+        Slider speedSlider =
+                controls.speedSlider();
+
+        Slider complexitySlider =
+                controls.complexitySlider();
+
+        Slider fogRadiusSlider =
+                controls.fogRadiusSlider();
+
+
+        // GENERATION BUTTON
+
+        Button generateBtn =
+                controls.generateButton();
+
+
+        // FILE BUTTONS
+
+        Button exportBtn =
+                controls.exportButton();
+
+        Button saveMazeBtn =
+                controls.saveMazeButton();
+
+        Button loadMazeBtn =
+                controls.loadMazeButton();
+
+        Button benchmarkBtn =
+                controls.benchmarkButton();
+
+        Button themeCustomizerBtn =
+                controls.themeCustomizerButton();
+
+        Button aboutBtn =
+                controls.aboutButton();
+
+
+        // SEED BUTTONS
+
+        Button randomizeSeedBtn =
+                controls.randomizeSeedButton();
+
+        Button dailyChallengeBtn =
+                controls.dailyChallengeButton();
+
+        Button copyShareCodeBtn =
+                controls.copyShareCodeButton();
+
+        // --------------------------------------------------
+// INITIALIZE MAZE GENERATION CONTROLLER
+// --------------------------------------------------
+
+        generationController = new MazeGenerationController(
+
+                new MazeGenerationController.Dependencies(
+
+                        mazeCanvas,
+
+                        // Shared application grid
+                        () -> grid,
+                        newGrid -> grid = newGrid,
+
+                        // Configuration controls
+                        shapeCombo,
+                        entranceExitModeCombo,
+                        solverCombo,
+                        showSolutionToggle,
+                        seedTextField,
+                        openingStatusLabel,
+
+                        // Gameplay state
+                        player,
+
+                        () -> isFogOfWar,
+                        () -> fogRadius,
+                        () -> isPlayMode,
+
+                        // Application callbacks
+                        this::stopMovementAnimation,
+                        this::spawnPlayerForCurrentMaze,
+
+                        active -> {
+                            customSelectionActive = active;
+                            customStartCell = null;
+                        },
+
+                        this::updateStatistics
+                )
         );
 
-        algorithmCombo = new ComboBox<>();
-        algorithmCombo.getItems().addAll(
-                "Recursive Backtracker (DFS)",
-                "Randomized Prim's",
-                "Randomized Kruskal's",
-                "Aldous-Broder",
-                "Wilson's"
-        );
 
-        algorithmCombo.setValue("Recursive Backtracker (DFS)");
-        algorithmCombo.setMaxWidth(Double.MAX_VALUE);
-
+        // --------------------------------------------------
         // SOLVER SELECTION
+        // --------------------------------------------------
 
-        Label solverHeader = new Label("Solver Algorithm:");
-        Label solverInfo = createInfoIcon(
-                "BFS finds the fewest cell transitions. DFS explores "
-                        + "a deep route. Dijkstra minimizes geometric distance."
-        );
-
-        solverCombo = new ComboBox<>();
-        solverCombo.getItems().addAll(
-                "Breadth-First Search (BFS)",
-                "Depth-First Search (DFS)",
-                "Dijkstra's Algorithm"
-        );
-
-        solverCombo.setValue("Breadth-First Search (BFS)");
-        solverCombo.setMaxWidth(Double.MAX_VALUE);
         solverCombo.valueProperty().addListener(
                 (obs, oldValue, newValue) -> {
-                    if (showSolutionToggle != null && showSolutionToggle.isSelected() && grid != null) {
+
+                    if (showSolutionToggle != null
+                            && showSolutionToggle.isSelected()
+                            && grid != null) {
+
                         solveAndDisplayPath();
                     }
                 }
         );
 
-        // PLAYABLE MODE
 
-        playModeToggle = new ToggleButton("Playable Mode: OFF");
-        playModeToggle.setMaxWidth(Double.MAX_VALUE);
-        Label playInfo = createInfoIcon(
-                "Rectangular: WASD. Circular: click highlighted passages "
-                        + "or use W/S/A/D for outward/inward/counterclockwise/clockwise. "
-                        + "Hexagonal and triangular: click a highlighted open neighbor; "
-                        + "WASD uses approximate screen directions."
-        );
-        HBox playBox = new HBox(5, playModeToggle, playInfo);
-        HBox.setHgrow(playModeToggle, Priority.ALWAYS);
-        playBox.setAlignment(Pos.CENTER_LEFT);
-
-        // FOG OF WAR
-
-        fogOfWarToggle = new ToggleButton("Fog of War: OFF");
-        fogOfWarToggle.setMaxWidth(Double.MAX_VALUE);
-        Label fogInfo = createInfoIcon(
-                "Hides undiscovered cells outside the player's "
-                        + "graph-distance visibility radius."
-        );
-        HBox fogBox = new HBox(5, fogOfWarToggle, fogInfo);
-        HBox.setHgrow(fogOfWarToggle, Priority.ALWAYS);
-        fogBox.setAlignment(Pos.CENTER_LEFT);
-
-        // THEME
-
-        themeToggle = new ToggleButton("Theme: Dark");
-        themeToggle.setMaxWidth(Double.MAX_VALUE);
-        themeToggle.setSelected(themeConfig.isDarkMode());
-        themeToggle.setText(themeConfig.isDarkMode()
-                        ? "Theme: Dark"
-                        : "Theme: Light"
-        );
-        Label themeInfo = createInfoIcon("Switches between dark and light visual themes.");
-        HBox themeBox = new HBox(5, themeToggle, themeInfo);
-        HBox.setHgrow(themeToggle, Priority.ALWAYS);
-        themeBox.setAlignment(Pos.CENTER_LEFT);
-
-        // WIDTH / TOPOLOGY PARAMETER SLIDER
-
-        Label widthLabel = new Label("Grid Width (Cols): 20");
-        Label widthInfo = createInfoIcon("Rectangular maze column count.");
-        HBox widthHeaderBox = new HBox(5, widthLabel, widthInfo);
-        Slider widthSlider = new Slider(10, 50, 20);
-        configureSlider(widthSlider, 10);
-
-        widthSlider.valueProperty().addListener(
-                (obs, oldValue, newValue) -> {
-                    widthLabel.setText(widthLabelFor(shapeCombo.getValue()) + newValue.intValue());
-                }
-        );
-
-        // HEIGHT / TOPOLOGY PARAMETER SLIDER
-
-        Label heightLabel = new Label("Grid Height (Rows): 20");
-        Label heightInfo = createInfoIcon("Rectangular maze row count.");
-        HBox heightHeaderBox = new HBox(5, heightLabel, heightInfo);
-        Slider heightSlider = new Slider(10, 50, 20);
-        configureSlider(heightSlider, 10);
-        heightSlider.valueProperty().addListener(
-                (obs, oldValue, newValue) -> {
-                    heightLabel.setText(heightLabelFor(shapeCombo.getValue()) + newValue.intValue());
-                }
-        );
-
-        // TOPOLOGY-DEPENDENT SLIDERS
-
-        shapeCombo.valueProperty().addListener(
-                (obs, oldTopology, newTopology) -> {
-                    configureDimensionSliders(
-                            newTopology,
-                            widthSlider,
-                            heightSlider,
-                            widthLabel,
-                            heightLabel,
-                            widthInfo,
-                            heightInfo,
-                            heightHeaderBox
-                    );
-                    configureEntranceExitModeOptions(newTopology);
-                }
-        );
-
-        configureDimensionSliders(
-                shapeCombo.getValue(),
-                widthSlider,
-                heightSlider,
-                widthLabel,
-                heightLabel,
-                widthInfo,
-                heightInfo,
-                heightHeaderBox
-        );
-        configureEntranceExitModeOptions(shapeCombo.getValue());
-
-        // GENERATION ANIMATION SPEED
-
-        Label speedLabel = new Label("Animation Delay (ms): 10");
-        Label speedInfo = createInfoIcon("Controls the step-by-step maze generation animation speed.");
-        HBox speedHeaderBox = new HBox(5, speedLabel, speedInfo);
-
-        Slider speedSlider = new Slider(0, 50, 10);
-        speedSlider.setMajorTickUnit(10);
-        speedSlider.setMinorTickCount(4);
-        speedSlider.setShowTickMarks(true);
-        speedSlider.setShowTickLabels(true);
-
-        speedSlider.valueProperty().addListener(
-                (obs, oldValue, newValue) -> {
-                    int val = newValue.intValue();
-                    if (val == 0) {
-                        speedSlider.setValue(1);
-                        val = 1;
-                    }
-                    speedLabel.setText("Animation Delay (ms): " + val);
-                }
-        );
-
-        // COMPLEXITY
-
-        Label complexityLabel = new Label("Complexity / Dead-End Density: 50%");
-        Label complexityInfo = createInfoIcon("Controls how aggressively extra passages are carved to reduce dead ends.");
-        HBox complexityHeaderBox = new HBox(5, complexityLabel, complexityInfo);
-        Slider complexitySlider = new Slider(0, 100, 50);
-        configureSlider(complexitySlider, 25);
-        complexitySlider.valueProperty().addListener(
-                (obs, oldValue, newValue) ->
-                        complexityLabel.setText("Complexity / Dead-End Density: " + newValue.intValue() + "%")
-        );
-
+        // --------------------------------------------------
         // FOG RADIUS
+        // --------------------------------------------------
 
-        Label fogRadiusLabel = new Label("Fog Radius: 2 cells");
-        Label fogRadiusInfo = createInfoIcon("Controls the player's visible graph-distance radius.");
-        HBox fogRadiusHeaderBox = new HBox(5, fogRadiusLabel, fogRadiusInfo);
-        Slider fogRadiusSlider = new Slider(1, 5, 2);
-        configureSlider(fogRadiusSlider, 1);
         fogRadiusSlider.valueProperty().addListener(
                 (obs, oldValue, newValue) -> {
+
                     fogRadius = newValue.intValue();
-                    fogRadiusLabel.setText("Fog Radius: " + fogRadius + " cells");
+
                     if (isFogOfWar && grid != null) {
-                        player.updateDiscovery(grid, true, fogRadius);
-                        mazeCanvas.setFogOfWarActive(true, fogRadius);
+
+                        player.updateDiscovery(
+                                grid,
+                                true,
+                                fogRadius
+                        );
+
+                        mazeCanvas.setFogOfWarActive(
+                                true,
+                                fogRadius
+                        );
                     }
                 }
         );
 
-        // GENERATE BUTTON
 
-        Button generateBtn = new Button("Generate Labyrinth");
-        generateBtn.setMaxWidth(Double.MAX_VALUE);
-        Label genInfo = createInfoIcon("Generates a new maze using the selected topology and settings.");
-        HBox genBox = new HBox(5, generateBtn, genInfo);
-        HBox.setHgrow(generateBtn, Priority.ALWAYS);
-        genBox.setAlignment(Pos.CENTER_LEFT);
-
+        // --------------------------------------------------
         // SHOW SOLUTION
+        // --------------------------------------------------
 
-        showSolutionToggle = new ToggleButton("Show Solution");
-        showSolutionToggle.setMaxWidth(Double.MAX_VALUE);
-        Label solutionInfo = createInfoIcon("Displays the route from entrance to exit using the selected solver.");
-        HBox solutionBox = new HBox(5, showSolutionToggle, solutionInfo);
-        HBox.setHgrow(showSolutionToggle, Priority.ALWAYS);
-        solutionBox.setAlignment(Pos.CENTER_LEFT);
         showSolutionToggle.setOnAction(event -> {
+
             if (grid == null) {
+
                 showSolutionToggle.setSelected(false);
+
                 return;
             }
+
             if (showSolutionToggle.isSelected()) {
+
                 showSolutionToggle.setText("Hide Solution");
-                if (customSelectionActive || grid.getEntranceCell() == null || grid.getExitCell() == null) {
+
+                if (customSelectionActive
+                        || grid.getEntranceCell() == null
+                        || grid.getExitCell() == null) {
+
                     mazeCanvas.setSolvedPath(null);
+
                     updateStatistics(-1);
+
                 } else {
+
                     solveAndDisplayPath();
                 }
+
             } else {
+
                 showSolutionToggle.setText("Show Solution");
+
                 mazeCanvas.setSolvedPath(null);
+
                 updateStatistics(-1);
             }
         });
 
-        // EXPORT IMAGE
 
-        Button exportBtn = new Button("Export Image");
-        exportBtn.setMaxWidth(Double.MAX_VALUE);
-        Label exportInfo = createInfoIcon("Exports the current maze canvas as a PNG image.");
-        HBox exportBox = new HBox(5, exportBtn, exportInfo);
-        HBox.setHgrow(exportBtn, Priority.ALWAYS);
-        exportBox.setAlignment(Pos.CENTER_LEFT);
-        exportBtn.setOnAction(event -> exportMazeImage(primaryStage));
+        // --------------------------------------------------
+        // IMAGE EXPORT
+        // --------------------------------------------------
 
-        // SAVE & LOAD LABYRINTH ACTIONS
+        exportBtn.setOnAction(
+                event -> exportMazeImage(primaryStage)
+        );
 
-        Button saveMazeBtn = new Button("Save Labyrinth");
-        saveMazeBtn.setMaxWidth(Double.MAX_VALUE);
-        Label saveInfo = createInfoIcon("Serializes and saves the current maze to a .maze file.");
-        HBox saveBox = new HBox(5, saveMazeBtn, saveInfo);
-        HBox.setHgrow(saveMazeBtn, Priority.ALWAYS);
-        saveBox.setAlignment(Pos.CENTER_LEFT);
-        saveMazeBtn.setOnAction(event -> saveLabyrinthFile(primaryStage));
 
-        Button loadMazeBtn = new Button("Load Labyrinth");
-        loadMazeBtn.setMaxWidth(Double.MAX_VALUE);
-        Label loadInfo = createInfoIcon("Loads and deserializes a maze from a .maze file.");
-        HBox loadBox = new HBox(5, loadMazeBtn, loadInfo);
-        HBox.setHgrow(loadMazeBtn, Priority.ALWAYS);
-        loadBox.setAlignment(Pos.CENTER_LEFT);
-        loadMazeBtn.setOnAction(event -> loadLabyrinthFile(primaryStage));
+        // --------------------------------------------------
+        // SAVE / LOAD
+        // --------------------------------------------------
 
-        // BENCHMARKING DASHBOARD BUTTON
-        Button benchmarkBtn = new Button("Performance Dashboard (#28)");
-        benchmarkBtn.setMaxWidth(Double.MAX_VALUE);
-        benchmarkBtn.setStyle("-fx-base: #00bcd4; -fx-font-weight: bold;");
-        Label benchmarkInfo = createInfoIcon("Launches the benchmarking and analytics dashboard comparing generation and solving algorithms.");
-        HBox benchmarkBox = new HBox(5, benchmarkBtn, benchmarkInfo);
-        HBox.setHgrow(benchmarkBtn, Priority.ALWAYS);
-        benchmarkBox.setAlignment(Pos.CENTER_LEFT);
-        benchmarkBtn.setOnAction(event -> view.BenchmarkModal.display(primaryStage));
+        saveMazeBtn.setOnAction(
+                event -> saveLabyrinthFile(primaryStage)
+        );
 
-        // THEME CUSTOMIZER BUTTON
-        Button themeCustomizerBtn = new Button("Customize Colors & Themes (#29)");
-        themeCustomizerBtn.setMaxWidth(Double.MAX_VALUE);
-        themeCustomizerBtn.setStyle("-fx-base: #00acc1; -fx-font-weight: bold;");
-        Label customizerInfo = createInfoIcon("Opens advanced color pickers, wall thickness sliders, and preset themes.");
-        HBox customizerBox = new HBox(5, themeCustomizerBtn, customizerInfo);
-        HBox.setHgrow(themeCustomizerBtn, Priority.ALWAYS);
-        customizerBox.setAlignment(Pos.CENTER_LEFT);
+        loadMazeBtn.setOnAction(
+                event -> loadLabyrinthFile(primaryStage)
+        );
+
+
+        // --------------------------------------------------
+        // BENCHMARKING
+        // --------------------------------------------------
+
+        benchmarkBtn.setOnAction(
+                event -> view.BenchmarkModal.display(primaryStage)
+        );
+
+
+        // --------------------------------------------------
+        // THEME CUSTOMIZER
+        // --------------------------------------------------
+
         themeCustomizerBtn.setOnAction(event ->
-                ThemeCustomizerModal.display(
+
+                view.ThemeCustomizerModal.display(
                         primaryStage,
                         themeConfig,
-                        () -> applyThemeAppearance(primaryStage, themeConfig)
+                        () -> applyThemeAppearance(
+                                primaryStage,
+                                themeConfig
+                        )
                 )
         );
 
+
+        // --------------------------------------------------
         // ABOUT APPLICATION
-
-        Button aboutBtn = new Button("About MazinStuff");
-
-        aboutBtn.setMaxWidth(Double.MAX_VALUE);
+        // --------------------------------------------------
 
         aboutBtn.setOnAction(event ->
-                AboutDialog.display(
+
+                view.AboutDialog.display(
                         primaryStage,
                         themeConfig.isDarkMode()
                 )
         );
 
-        // STATISTICS
 
-        statsLabel = new Label(
-                "Statistics:\n"
-                        + "Total Cells: -\n"
-                        + "Dead Ends: -\n"
-                        + "Path Length: -"
-        );
+        // --------------------------------------------------
+        // RANDOMIZE SEED
+        // --------------------------------------------------
 
-        statsLabel.setStyle("-fx-font-family: monospace; -fx-padding: 10;");
-        Label statsInfo = createInfoIcon("Live metrics for cells, dead ends, and solution path length.");
-        HBox statsHeaderBox = new HBox(5, new Label("Maze Metrics"), statsInfo);
+        randomizeSeedBtn.setOnAction(event -> {
 
-        // SEED & SHARE CODE CONTROLS
-        Label seedHeader = new Label("Generation Seed / Share Code:");
-        Label seedInfo = createInfoIcon("Enter a custom seed or share code to reproduce exact mazes.");
-        seedTextField = new javafx.scene.control.TextField(String.valueOf(currentSeed));
-        seedTextField.setMaxWidth(Double.MAX_VALUE);
-
-        Button randomizeSeedBtn = new Button("Randomize Seed");
-        randomizeSeedBtn.setMaxWidth(Double.MAX_VALUE);
-        randomizeSeedBtn.setOnAction(e -> {
             currentSeed = new java.util.Random().nextLong();
-            seedTextField.setText(String.valueOf(currentSeed));
+
+            seedTextField.setText(
+                    String.valueOf(currentSeed)
+            );
         });
 
-        Button dailyChallengeBtn = new Button("Maze of the Day (Daily Challenge)");
-        dailyChallengeBtn.setMaxWidth(Double.MAX_VALUE);
-        dailyChallengeBtn.setOnAction(e -> {
-            String todayStr = java.time.LocalDate.now().format(java.time.format.DateTimeFormatter.ISO_DATE);
+
+        // --------------------------------------------------
+        // DAILY CHALLENGE
+        // --------------------------------------------------
+
+        dailyChallengeBtn.setOnAction(event -> {
+
+            String todayStr = java.time.LocalDate
+                    .now()
+                    .format(
+                            java.time.format.DateTimeFormatter.ISO_DATE
+                    );
+
             currentSeed = todayStr.hashCode();
+
             seedTextField.setText(todayStr);
-            openingStatusLabel.setText("Loaded Daily Challenge for: " + todayStr);
+
+            openingStatusLabel.setText(
+                    "Loaded Daily Challenge for: " + todayStr
+            );
         });
 
-        Button copyShareCodeBtn = new Button("Copy Share Code");
-        copyShareCodeBtn.setMaxWidth(Double.MAX_VALUE);
-        copyShareCodeBtn.setOnAction(e -> {
+
+        // --------------------------------------------------
+        // COPY SHARE CODE
+        // --------------------------------------------------
+
+        copyShareCodeBtn.setOnAction(event -> {
+
             try {
-                String shareCode = shapeCombo.getValue() + "|" + seedTextField.getText() + "|" + algorithmCombo.getValue();
-                javafx.scene.input.ClipboardContent content = new javafx.scene.input.ClipboardContent();
+
+                String shareCode =
+                        shapeCombo.getValue() + "|" +
+                                seedTextField.getText() + "|" +
+                                algorithmCombo.getValue();
+
+                javafx.scene.input.ClipboardContent content =
+                        new javafx.scene.input.ClipboardContent();
+
                 content.putString(shareCode);
-                javafx.scene.input.Clipboard.getSystemClipboard().setContent(content);
-                new Alert(Alert.AlertType.INFORMATION, "Share code copied to clipboard!", ButtonType.OK).show();
+
+                javafx.scene.input.Clipboard
+                        .getSystemClipboard()
+                        .setContent(content);
+
+                new Alert(
+                        Alert.AlertType.INFORMATION,
+                        "Share code copied to clipboard!",
+                        ButtonType.OK
+                ).show();
+
             } catch (Exception ex) {
-                new Alert(Alert.AlertType.ERROR, "Failed to copy to clipboard: " + ex.getMessage(), ButtonType.OK).show();
+
+                new Alert(
+                        Alert.AlertType.ERROR,
+                        "Failed to copy to clipboard: " + ex.getMessage(),
+                        ButtonType.OK
+                ).show();
             }
         });
 
-        // --- TABPANE INTERFACE STRUCTURE ---
-        javafx.scene.control.TabPane controlTabs = new javafx.scene.control.TabPane();
-        controlTabs.setTabClosingPolicy(javafx.scene.control.TabPane.TabClosingPolicy.UNAVAILABLE);
 
-        // TAB 1: MAZE EDITOR
-        VBox genSolveContent = new VBox(8,
-                new HBox(5, shapeHeader, shapeInfo), shapeCombo,
-                new HBox(5, entranceExitHeader, entranceExitInfo), entranceExitModeCombo, openingStatusLabel,
-                new HBox(5, algoHeader, algoInfo), algorithmCombo,
-                widthHeaderBox, widthSlider,
-                heightHeaderBox, heightSlider,
-                complexityHeaderBox, complexitySlider,
-                new Separator(),
-                new HBox(5, solverHeader, solverInfo), solverCombo,
-                speedHeaderBox, speedSlider,
-                solutionBox,
-                new Separator(),
-                new HBox(5, seedHeader, seedInfo), seedTextField,
-                randomizeSeedBtn, dailyChallengeBtn, copyShareCodeBtn
-        );
-        genSolveContent.setPadding(new Insets(10));
+        // --------------------------------------------------
+        // RESPONSIVE CANVAS AUTO-SCALING
+        // --------------------------------------------------
 
-        ScrollPane genSolveScroll = new ScrollPane(genSolveContent);
-        genSolveScroll.setFitToWidth(true);
-        genSolveScroll.setStyle("-fx-background: transparent; -fx-background-color: transparent;");
-        javafx.scene.control.Tab genSolveTab = new javafx.scene.control.Tab("Maze Editor", genSolveScroll);
+        javafx.animation.PauseTransition resizeDebouncer =
+                new javafx.animation.PauseTransition(
+                        javafx.util.Duration.millis(100)
+                );
 
-        // TAB 2: PLAY
-        VBox gameContent = new VBox(8,
-                playBox,
-                fogBox,
-                fogRadiusHeaderBox, fogRadiusSlider
-        );
-        gameContent.setPadding(new Insets(10));
-        javafx.scene.control.Tab gameTab = new javafx.scene.control.Tab("Play", gameContent);
-
-        // TAB 3: FILE & ANALYTICS
-        VBox fileContent = new VBox(8,
-                themeBox,
-                customizerBox,
-                exportBox,
-                saveBox,
-                loadBox,
-                benchmarkBox,
-                new Separator(),
-                aboutBtn,
-                new Separator(),
-                statsHeaderBox,
-                statsLabel
-        );
-        fileContent.setPadding(new Insets(10));
-        javafx.scene.control.Tab fileTab = new javafx.scene.control.Tab("File", fileContent);
-
-        controlTabs.getTabs().addAll(genSolveTab, gameTab, fileTab);
-
-        // PINNED GLOBAL TOOLBAR
-        VBox pinnedGlobalBar = new VBox(8,
-                genBox,
-                playBox
-        );
-        pinnedGlobalBar.setPadding(new Insets(10));
-
-        // CONTROLS LAYOUT CONTAINER
-        VBox controls = new VBox(0, pinnedGlobalBar, new Separator(), controlTabs);
-        controls.setPrefWidth(320);
-
-        // WRAP CANVAS IN A STACKPANE
-        StackPane canvasContainer = new StackPane(mazeCanvas);
-        canvasContainer.setAlignment(Pos.CENTER);
-        canvasContainer.setStyle("-fx-padding: 15;");
-
-        // MAIN LAYOUT
-        BorderPane root = new BorderPane();
-        root.setCenter(canvasContainer);
-        root.setRight(controls);
-        Scene scene = new Scene(root, 940, 840);
-
-        scene.getStylesheets().add(getClass().getResource("/style.css").toExternalForm());
-
-        // --- RESPONSIVE CANVAS AUTO-SCALING & DEBOUNCED RESIZE LISTENER ---[cite: 3, 4]
-        javafx.animation.PauseTransition resizeDebouncer = new javafx.animation.PauseTransition(javafx.util.Duration.millis(100));
         resizeDebouncer.setOnFinished(event -> {
-            double availableWidth = Math.max(300, scene.getWidth() - 340);
-            double availableHeight = Math.max(300, scene.getHeight() - 40);
+
+            double availableWidth = Math.max(
+                    300,
+                    scene.getWidth() - 340
+            );
+
+            double availableHeight = Math.max(
+                    300,
+                    scene.getHeight() - 40
+            );
 
             if (mazeCanvas != null) {
+
                 double renderWidth = availableWidth;
                 double renderHeight = availableHeight;
 
-                if (grid != null && grid.getTopology() == TopologyType.RECTANGULAR && widthSlider != null && heightSlider != null) {
+                if (grid != null
+                        && grid.getTopology() == TopologyType.RECTANGULAR
+                        && widthSlider != null
+                        && heightSlider != null) {
+
                     double cols = widthSlider.getValue();
                     double rows = heightSlider.getValue();
+
                     double gridAspect = cols / rows;
 
                     if (availableWidth / availableHeight > gridAspect) {
+
                         renderWidth = availableHeight * gridAspect;
+
                     } else {
+
                         renderHeight = availableWidth / gridAspect;
                     }
+
                 } else {
-                    double size = Math.min(availableWidth, availableHeight);
+
+                    double size = Math.min(
+                            availableWidth,
+                            availableHeight
+                    );
+
                     renderWidth = size;
                     renderHeight = size;
                 }
 
-                mazeCanvas.resizeCanvas(renderWidth, renderHeight);
+                mazeCanvas.resizeCanvas(
+                        renderWidth,
+                        renderHeight
+                );
+
                 if (grid != null) {
+
                     if (grid.isCircular()) {
-                        grid.layoutCircularGrid(renderWidth, renderHeight, 0.0);
+
+                        grid.layoutCircularGrid(
+                                renderWidth,
+                                renderHeight,
+                                0.0
+                        );
+
                     } else if (grid.isPolygonal()) {
-                        grid.layoutPolygonGrid(renderWidth, renderHeight, 0.0);
+
+                        grid.layoutPolygonGrid(
+                                renderWidth,
+                                renderHeight,
+                                0.0
+                        );
                     }
+
                     mazeCanvas.draw();
                 }
             }
         });
 
-        scene.widthProperty().addListener((obs, oldVal, newVal) -> resizeDebouncer.playFromStart());
-        scene.heightProperty().addListener((obs, oldVal, newVal) -> resizeDebouncer.playFromStart());
 
+        scene.widthProperty().addListener(
+                (obs, oldVal, newVal) ->
+                        resizeDebouncer.playFromStart()
+        );
+
+        scene.heightProperty().addListener(
+                (obs, oldVal, newVal) ->
+                        resizeDebouncer.playFromStart()
+        );
+
+
+        // --------------------------------------------------
         // THEME ACTION
-        themeToggle.setOnAction(event -> {
-            themeConfig.setDarkMode(themeToggle.isSelected());
+        // --------------------------------------------------
 
-            // Remember the selected mode.
-            applyThemeAppearance(primaryStage, themeConfig);
+        themeToggle.setOnAction(event -> {
+
+            themeConfig.setDarkMode(
+                    themeToggle.isSelected()
+            );
+
+            applyThemeAppearance(
+                    primaryStage,
+                    themeConfig
+            );
         });
 
+
+        // --------------------------------------------------
         // GENERATE ACTION
+        // --------------------------------------------------
 
         generateBtn.setOnAction(event ->
+
                 startGenerationAnimation(
                         (int) widthSlider.getValue(),
                         (int) heightSlider.getValue(),
@@ -610,120 +610,257 @@ public class MazeGeneratorApp extends Application {
                 )
         );
 
+
+        // --------------------------------------------------
         // PLAYABLE MODE ACTION
+        // --------------------------------------------------
 
         playModeToggle.setOnAction(event -> {
+
             isPlayMode = playModeToggle.isSelected();
+
             if (isPlayMode) {
-                if (grid == null || grid.getEntranceCell() == null || grid.getExitCell() == null || customSelectionActive) {
+
+                if (grid == null
+                        || grid.getEntranceCell() == null
+                        || grid.getExitCell() == null
+                        || customSelectionActive) {
+
                     playModeToggle.setSelected(false);
+
                     isPlayMode = false;
+
                     return;
                 }
+
                 playModeToggle.setText("Playable Mode: ON");
+
                 spawnPlayerForCurrentMaze();
+
             } else {
+
                 playModeToggle.setText("Playable Mode: OFF");
+
                 stopMovementAnimation();
+
                 player.reset();
+
                 mazeCanvas.setPlayerCell(null);
-                mazeCanvas.setFogOfWarActive(false, fogRadius);
+
+                mazeCanvas.setFogOfWarActive(
+                        false,
+                        fogRadius
+                );
+
                 mazeCanvas.clearPlayerScreenPosition();
-                mazeCanvas.setHighlightedCells(List.of());
+
+                mazeCanvas.setHighlightedCells(
+                        java.util.List.of()
+                );
+
                 mazeCanvas.setHoveredCell(null);
             }
         });
 
-        // FOG ACTION
+
+        // --------------------------------------------------
+        // FOG OF WAR ACTION
+        // --------------------------------------------------
 
         fogOfWarToggle.setOnAction(event -> {
+
             isFogOfWar = fogOfWarToggle.isSelected();
+
             if (isFogOfWar) {
+
                 fogOfWarToggle.setText("Fog of War: ON");
+
                 if (grid != null) {
+
                     for (Cell cell : grid.getAllCells()) {
                         cell.discovered = false;
                     }
-                    if (isPlayMode && player.getCurrentCell() != null) {
-                        player.updateDiscovery(grid, true, fogRadius);
+
+                    if (isPlayMode
+                            && player.getCurrentCell() != null) {
+
+                        player.updateDiscovery(
+                                grid,
+                                true,
+                                fogRadius
+                        );
                     }
                 }
-                mazeCanvas.setFogOfWarActive(true, fogRadius);
+
+                mazeCanvas.setFogOfWarActive(
+                        true,
+                        fogRadius
+                );
+
             } else {
+
                 fogOfWarToggle.setText("Fog of War: OFF");
+
                 if (grid != null) {
+
                     for (Cell cell : grid.getAllCells()) {
                         cell.discovered = true;
                     }
                 }
-                mazeCanvas.setFogOfWarActive(false, fogRadius);
+
+                mazeCanvas.setFogOfWarActive(
+                        false,
+                        fogRadius
+                );
             }
         });
 
+
+        // --------------------------------------------------
         // KEYBOARD MOVEMENT
+        // --------------------------------------------------
 
         scene.setOnKeyPressed(event -> {
-            if (!isPlayMode || customSelectionActive || isPlayerMoving || grid == null || player.getCurrentCell() == null) {
+
+            if (!isPlayMode
+                    || customSelectionActive
+                    || isPlayerMoving
+                    || grid == null
+                    || player.getCurrentCell() == null) {
+
                 return;
             }
+
             Cell current = player.getCurrentCell();
+
             Cell target;
+
             switch (grid.getTopology()) {
+
                 case RECTANGULAR ->
-                        target = findRectangularKeyboardNeighbor(current, event.getCode());
+
+                        target = findRectangularKeyboardNeighbor(
+                                current,
+                                event.getCode()
+                        );
+
                 case CIRCULAR ->
-                        target = findPolarKeyboardNeighbor(current, event.getCode());
+
+                        target = findPolarKeyboardNeighbor(
+                                current,
+                                event.getCode()
+                        );
+
                 case HEXAGONAL, TRIANGULAR ->
-                        target = findPolygonKeyboardNeighbor(current, event.getCode());
+
+                        target = findPolygonKeyboardNeighbor(
+                                current,
+                                event.getCode()
+                        );
+
                 default -> target = null;
             }
+
             if (target != null) {
+
                 movePlayerTo(target);
+
                 event.consume();
             }
         });
 
+
+        // --------------------------------------------------
         // GEOMETRIC MOUSE HOVER
+        // --------------------------------------------------
 
         mazeCanvas.setOnMouseMoved(event -> {
-            if (customSelectionActive || !isPlayMode || isPlayerMoving || grid == null || !grid.isGeometric() || player.getCurrentCell() == null) {
+
+            if (customSelectionActive
+                    || !isPlayMode
+                    || isPlayerMoving
+                    || grid == null
+                    || !grid.isGeometric()
+                    || player.getCurrentCell() == null) {
+
                 mazeCanvas.setHoveredCell(null);
+
                 return;
             }
-            Cell hovered = mazeCanvas.findCellAt(event.getX(), event.getY());
-            boolean legal = hovered != null && player.getCurrentCell().isPassageOpenTo(hovered);
-            mazeCanvas.setHoveredCell(legal ? hovered : null);
-        });
-        mazeCanvas.setOnMouseExited(event -> mazeCanvas.setHoveredCell(null));
 
+            Cell hovered = mazeCanvas.findCellAt(
+                    event.getX(),
+                    event.getY()
+            );
+
+            boolean legal = hovered != null
+                    && player.getCurrentCell().isPassageOpenTo(hovered);
+
+            mazeCanvas.setHoveredCell(
+                    legal ? hovered : null
+            );
+        });
+
+
+        mazeCanvas.setOnMouseExited(
+                event -> mazeCanvas.setHoveredCell(null)
+        );
+
+
+        // --------------------------------------------------
         // MOUSE CLICK HANDLING
+        // --------------------------------------------------
 
         mazeCanvas.setOnMouseClicked(event -> {
+
             if (customSelectionActive) {
+
                 if (!isPlayerMoving) {
-                    handleCustomSelectionClick(event.getX(), event.getY());
+
+                    handleCustomSelectionClick(
+                            event.getX(),
+                            event.getY()
+                    );
                 }
+
                 event.consume();
+
                 return;
             }
-            if (!isPlayMode || isPlayerMoving || grid == null || !grid.isGeometric() || player.getCurrentCell() == null) {
+
+            if (!isPlayMode
+                    || isPlayerMoving
+                    || grid == null
+                    || !grid.isGeometric()
+                    || player.getCurrentCell() == null) {
+
                 return;
             }
+
             Cell clicked = mazeCanvas.findCellAt(
                     event.getX(),
                     event.getY()
             );
-            if (clicked != null && player.getCurrentCell().isPassageOpenTo(clicked)) {
+
+            if (clicked != null
+                    && player.getCurrentCell().isPassageOpenTo(clicked)) {
+
                 movePlayerTo(clicked);
+
                 event.consume();
             }
         });
 
+
+        // --------------------------------------------------
         // SHOW WINDOW
+        // --------------------------------------------------
 
         primaryStage.setScene(scene);
+
         primaryStage.show();
     }
+
 
     private void applyThemeAppearance(
             Stage owner,
@@ -769,24 +906,6 @@ public class MazeGeneratorApp extends Application {
 
         themeConfig.save();
     }
-
-    // ENTRANCE / EXIT MODE OPTIONS
-
-    private void configureEntranceExitModeOptions(TopologyType topology) {
-        EntranceExitMode previous = entranceExitModeCombo.getValue();
-        entranceExitModeCombo.getItems().clear();
-        entranceExitModeCombo.getItems().addAll(EntranceExitMode.LEFT_TO_RIGHT, EntranceExitMode.TOP_TO_BOTTOM);
-        if (topology == TopologyType.CIRCULAR) {
-            entranceExitModeCombo.getItems().add(EntranceExitMode.CENTER_TO_OUTER);
-        }
-        entranceExitModeCombo.getItems().add(EntranceExitMode.CUSTOM);
-        if (previous != null && entranceExitModeCombo.getItems().contains(previous)) {
-            entranceExitModeCombo.setValue(previous);
-        } else {
-            entranceExitModeCombo.setValue(EntranceExitMode.LEFT_TO_RIGHT);
-        }
-    }
-
 
     // CUSTOM ENTRANCE / EXIT SELECTION
 
@@ -845,187 +964,6 @@ public class MazeGeneratorApp extends Application {
         mazeCanvas.setPlayerCell(player.getCurrentCell());
         mazeCanvas.setFogOfWarActive(isFogOfWar, fogRadius);
         refreshInteractionHints();
-    }
-
-    // SLIDER HELPERS
-
-    private void configureSlider(Slider slider, double majorTickUnit) {
-        slider.setShowTickLabels(true);
-        slider.setShowTickMarks(true);
-        slider.setMajorTickUnit(majorTickUnit);
-        slider.setBlockIncrement(1);
-        slider.setSnapToTicks(true);
-    }
-
-    private void configureDimensionSliders(
-            TopologyType topology,
-            Slider widthSlider,
-            Slider heightSlider,
-            Label widthLabel,
-            Label heightLabel,
-            Label widthInfo,
-            Label heightInfo,
-            HBox heightHeaderBox
-    ) {
-        double widthMin;
-        double widthMax;
-        double widthDefault;
-        double widthMajor;
-        double heightMin;
-        double heightMax;
-        double heightDefault;
-        double heightMajor;
-        boolean singleDimension = false;
-
-        switch (topology) {
-            case RECTANGULAR -> {
-
-                widthMin = 10;
-                widthMax = 50;
-                widthDefault = 20;
-                widthMajor = 10;
-
-                heightMin = 10;
-                heightMax = 50;
-                heightDefault = 20;
-                heightMajor = 10;
-            }
-
-            case CIRCULAR -> {
-
-                widthMin = 8;
-                widthMax = 24;
-                widthDefault = 16;
-                widthMajor = 4;
-
-                heightMin = 4;
-                heightMax = 12;
-                heightDefault = 8;
-                heightMajor = 2;
-            }
-
-            case HEXAGONAL -> {
-
-                widthMin = 2;
-                widthMax = 7;
-                widthDefault = 4;
-                widthMajor = 1;
-
-                heightMin = 1;
-                heightMax = 1;
-                heightDefault = 1;
-                heightMajor = 1;
-
-                singleDimension = true;
-            }
-
-            case TRIANGULAR -> {
-
-                widthMin = 4;
-                widthMax = 16;
-                widthDefault = 10;
-                widthMajor = 2;
-
-                heightMin = 1;
-                heightMax = 1;
-                heightDefault = 1;
-                heightMajor = 1;
-
-                singleDimension = true;
-            }
-            default -> throw new IllegalStateException("Unknown topology: " + topology);
-        }
-
-        widthSlider.setMin(widthMin);
-        widthSlider.setMax(widthMax);
-        widthSlider.setMajorTickUnit(widthMajor);
-        widthSlider.setBlockIncrement(1);
-        widthSlider.setSnapToTicks(true);
-        widthSlider.setValue(widthDefault);
-
-        heightSlider.setMin(heightMin);
-        heightSlider.setMax(heightMax);
-        heightSlider.setMajorTickUnit(heightMajor);
-        heightSlider.setBlockIncrement(1);
-        heightSlider.setSnapToTicks(true);
-        heightSlider.setValue(heightDefault);
-
-        heightHeaderBox.setVisible(!singleDimension);
-        heightHeaderBox.setManaged(!singleDimension);
-
-        heightSlider.setVisible(!singleDimension);
-        heightSlider.setManaged(!singleDimension);
-
-        widthLabel.setText(widthLabelFor(topology) + (int) widthDefault);
-        heightLabel.setText(heightLabelFor(topology) + (int) heightDefault);
-
-        updateInfoTooltip(widthInfo, widthTooltipFor(topology));
-        updateInfoTooltip(heightInfo, heightTooltipFor(topology));
-    }
-
-    private String widthLabelFor(TopologyType topology) {
-        return switch (topology) {
-            case RECTANGULAR -> "Grid Width (Cols): ";
-            case CIRCULAR -> "Outer Ring Sectors: ";
-            case HEXAGONAL -> "Hex Board Radius: ";
-            case TRIANGULAR -> "Triangle Side Length: ";
-        };
-    }
-
-
-    private String heightLabelFor(TopologyType topology) {
-        return switch (topology) {
-            case RECTANGULAR -> "Grid Height (Rows): ";
-            case CIRCULAR -> "Number of Rings: ";
-            case HEXAGONAL -> "Hexagon Height: ";
-            case TRIANGULAR -> "Triangle Height: ";
-        };
-    }
-
-    private String widthTooltipFor(TopologyType topology) {
-        return switch (topology) {
-            case RECTANGULAR -> "Number of rectangular columns (10–50).";
-            case CIRCULAR -> "Number of sectors along the outermost polar ring (8–24).";
-            case HEXAGONAL -> "Controls the radius of the regular hexagonal board (2–7). "
-                            + "The outer boundary is a regular hexagon.";
-            case TRIANGULAR -> "Controls the number of small equilateral triangle edges "
-                            + "along each side of the large triangular board (4–16). "
-                            + "Total cells = N squared.";
-        };
-    }
-
-    private String heightTooltipFor(TopologyType topology) {
-        return switch (topology) {
-            case RECTANGULAR -> "Number of rectangular rows (10–50).";
-            case CIRCULAR -> "Number of concentric rings outside the center (4–12).";
-            case HEXAGONAL -> "Hexagonal board dimensions are controlled by its radius.";
-            case TRIANGULAR -> "Triangular board dimensions are controlled by its side length.";
-        };
-    }
-
-
-    private void updateInfoTooltip(Label infoLabel, String text) {
-        Tooltip tooltip = (Tooltip) infoLabel.getProperties().get("mazeInfoTooltip");
-        if (tooltip == null) {
-            tooltip = new Tooltip(text);
-            infoLabel.getProperties().put("mazeInfoTooltip", tooltip);
-            Tooltip.install(infoLabel, tooltip);
-        } else {
-            tooltip.setText(text);
-        }
-    }
-
-    private Label createInfoIcon(String tooltipText) {
-        Label infoLabel = new Label("ℹ");
-        infoLabel.setStyle("-fx-text-fill: #00bcd4; "
-                        + "-fx-font-weight: bold; "
-                        + "-fx-cursor: hand; "
-                        + "-fx-padding: 0 0 0 4;"
-        );
-        Tooltip tooltip = new Tooltip(tooltipText);
-        infoLabel.getProperties().put("mazeInfoTooltip", tooltip);
-        Tooltip.install(infoLabel, tooltip);
-        return infoLabel;
     }
 
     // ENHANCED IMAGE EXPORT (PNG / JPG WITH BACKGROUND FALLBACK)
@@ -1261,186 +1199,21 @@ public class MazeGeneratorApp extends Application {
 
     // RENDERER SELECTION AND MAZE GENERATION
 
-    private void startGenerationAnimation(int width, int height, double animDelay, double complexityFactor, String algorithm) {
-        if (animTimeline != null) {
-            animTimeline.stop();
-        }
-        stopMovementAnimation();
-        customSelectionActive = false;
-        customStartCell = null;
-        openingStatusLabel.setText("Generating maze...");
-        TopologyType topology = shapeCombo.getValue();
-        EntranceExitMode openingMode = entranceExitModeCombo.getValue();
+    private void startGenerationAnimation(
+            int width,
+            int height,
+            double animDelay,
+            double complexityFactor,
+            String algorithm
+    ) {
 
-        // PARSE SEED
-        long seedToUse;
-        try {
-            String text = seedTextField.getText().trim();
-            if (text.isEmpty()) {
-                seedToUse = System.currentTimeMillis();
-            } else {
-                try {
-                    seedToUse = Long.parseLong(text);
-                } catch (NumberFormatException e) {
-                    seedToUse = text.hashCode();
-                }
-            }
-        } catch (Exception e) {
-            seedToUse = System.currentTimeMillis();
-        }
-        java.util.Random seededRandom = new java.util.Random(seedToUse);
-
-        // SELECT RENDERER
-
-        switch (topology) {
-            case RECTANGULAR -> mazeCanvas.setRenderer(new RectangularRenderer());
-            case CIRCULAR -> mazeCanvas.setRenderer(new CircularRenderer());
-            case HEXAGONAL -> mazeCanvas.setRenderer(new HexagonalRenderer());
-            case TRIANGULAR -> mazeCanvas.setRenderer(new TriangularRenderer());
-        }
-
-        // CREATE CORRECT GRID
-
-        grid = switch (topology) {
-            case HEXAGONAL, TRIANGULAR -> new MazeGrid(width, width, topology);
-            case RECTANGULAR, CIRCULAR -> new MazeGrid(width, height, topology);
-        };
-
-        // CALCULATE RESPONSIVE WORKSPACE DIMENSIONS BASED ON CURRENT WINDOW SIZE
-        Scene currentScene = (mazeCanvas != null) ? mazeCanvas.getScene() : null;
-        double availableWidth = (currentScene != null) ? Math.max(300, currentScene.getWidth() - 340) : CANVAS_SIZE;
-        double availableHeight = (currentScene != null) ? Math.max(300, currentScene.getHeight() - 40) : CANVAS_SIZE;
-        double renderWidth = availableWidth;
-        double renderHeight = availableHeight;
-
-        if (topology == TopologyType.RECTANGULAR) {
-            double gridAspect = (double) width / height;
-            if (availableWidth / availableHeight > gridAspect) {
-                renderWidth = availableHeight * gridAspect;
-            } else {
-                renderHeight = availableWidth / gridAspect;
-            }
-        } else {
-            double size = Math.min(availableWidth, availableHeight);
-            renderWidth = size;
-            renderHeight = size;
-        }
-
-        // CANVAS DIMENSIONS AND GEOMETRY
-
-        switch (topology) {
-            case RECTANGULAR -> {
-                double cellWidth = renderWidth / width;
-                double cellHeight = renderHeight / height;
-                mazeCanvas.resizeCanvas(renderWidth, renderHeight);
-                for (Cell cell : grid.getAllCells()) {
-                    cell.screenX = (cell.x + 0.5) * cellWidth;
-                    cell.screenY = (cell.y + 0.5) * cellHeight;
-                }
-            }
-            case CIRCULAR -> {
-                mazeCanvas.resizeCanvas(renderWidth, renderHeight);
-                grid.layoutCircularGrid(renderWidth, renderHeight, GEOMETRY_PADDING);
-            }
-            case HEXAGONAL -> {
-                mazeCanvas.resizeCanvas(renderWidth, renderHeight);
-                grid.layoutHexagonalGrid(renderWidth, renderHeight, GEOMETRY_PADDING);
-            }
-            case TRIANGULAR -> {
-                mazeCanvas.resizeCanvas(renderWidth, renderHeight);
-                grid.layoutTriangularGrid(renderWidth, renderHeight, GEOMETRY_PADDING);
-            }
-        }
-
-        // INITIALIZE CELL STATES
-
-        for (Cell cell : grid.getAllCells()) {
-            cell.visited = false;
-            cell.discovered = !isFogOfWar;
-        }
-
-        // RESET PREVIOUS VISUAL STATE
-
-        mazeCanvas.setGrid(grid);
-        mazeCanvas.setSolvedPath(null);
-        mazeCanvas.setCurrentHead(null);
-        mazeCanvas.setPlayerCell(null);
-        mazeCanvas.setHighlightedCells(List.of());
-        mazeCanvas.setHoveredCell(null);
-        mazeCanvas.clearPlayerScreenPosition();
-        mazeCanvas.setFogOfWarActive(isFogOfWar, fogRadius);
-        player.reset();
-        updateStatistics(-1);
-        if (showSolutionToggle != null) {
-            showSolutionToggle.setSelected(false);
-            showSolutionToggle.setText("Show Solution");
-        }
-
-        // CHOOSE GENERATOR
-
-        MazeGenerator generator = switch (algorithm) {
-            case "Randomized Prim's" -> new PrimsMazeGenerator();
-            case "Randomized Kruskal's" -> new KruskalsMazeGenerator();
-            case "Aldous-Broder" -> new AldousBroderMazeGenerator();
-            case "Wilson's" -> new WilsonsMazeGenerator();
-            default -> new DfsMazeGenerator();
-        };
-        generator.initialize(grid, seededRandom);
-
-        // GENERATION TIMELINE
-
-        animTimeline = new Timeline();
-        KeyFrame keyFrame = new KeyFrame(Duration.millis(animDelay),
-                event -> {
-                    boolean running = generator.step();
-                    mazeCanvas.setCurrentHead(generator.getCurrentHead());
-
-                    // GENERATION FINISHED
-
-                    if (!running) {
-                        animTimeline.stop();
-                        entranceExitModeCombo.setDisable(false);
-                        grid.applyComplexityFactor(complexityFactor, seededRandom);
-
-                        // CREATE ENTRANCE AND EXIT
-
-                        if (openingMode == EntranceExitMode.CUSTOM) {
-                            grid.createOpenings(EntranceExitMode.CUSTOM, seededRandom);
-                            customSelectionActive = true;
-                            customStartCell = null;
-                            openingStatusLabel.setText("Custom selection: click a cell to set START. "
-                                    + "Then click another cell to set END."
-                            );
-                        } else {
-                            customSelectionActive = false;
-                            customStartCell = null;
-                            grid.createOpenings(openingMode, seededRandom);
-                            openingStatusLabel.setText("Entrance and exit configured: " + openingMode);
-                        }
-                        mazeCanvas.setCurrentHead(null);
-                        mazeCanvas.draw();
-
-                        // SOLUTION
-
-                        if (showSolutionToggle.isSelected() && !customSelectionActive) {
-                            solveAndDisplayPath();
-                        } else {
-                            mazeCanvas.setSolvedPath(null);
-                            updateStatistics(-1);
-                        }
-
-                        // SPAWN PLAYER
-
-                        if (isPlayMode && grid.getEntranceCell() != null && grid.getExitCell() != null) {
-                            spawnPlayerForCurrentMaze();
-                        }
-                    }
-                }
+        generationController.startGenerationAnimation(
+                width,
+                height,
+                animDelay,
+                complexityFactor,
+                algorithm
         );
-        animTimeline.getKeyFrames().add(keyFrame);
-        animTimeline.setCycleCount(Timeline.INDEFINITE);
-        entranceExitModeCombo.setDisable(true);
-        animTimeline.play();
     }
 
     // INTERACTION HINTS
@@ -1750,23 +1523,7 @@ public class MazeGeneratorApp extends Application {
     // SOLVE AND DISPLAY PATH
 
     private void solveAndDisplayPath() {
-        if (grid == null || grid.getEntranceCell() == null || grid.getExitCell() == null) {
-            return;
-        }
-        String selectedSolver = solverCombo.getValue();
-        List<Cell> path = switch (selectedSolver) {
-            case "Depth-First Search (DFS)" -> DfsMazeSolver.solve(grid);
-            case "Dijkstra's Algorithm" -> DijkstraMazeSolver.solve(grid);
-            default -> BfsMazeSolver.solve(grid);
-        };
-
-        if (path != null && !path.isEmpty()) {
-            mazeCanvas.setSolvedPath(path);
-            updateStatistics(path.size());
-        } else {
-            mazeCanvas.setSolvedPath(null);
-            updateStatistics(-1);
-        }
+        generationController.solveAndDisplayPath();
     }
 
     // STATISTICS
