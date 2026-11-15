@@ -13,13 +13,13 @@ repositories {
 }
 
 javafx {
-    version = '21.0.2'
+    version = '27.0.1'
     modules = ['javafx.base','javafx.controls', 'javafx.fxml', 'javafx.graphics', 'javafx.swing']
 }
 
 java {
     toolchain {
-        languageVersion = JavaLanguageVersion.of(21)
+        languageVersion = JavaLanguageVersion.of(27)
     }
 }
 
