@@ -1,4 +1,3 @@
-
 package com.greytimes.mazinstuff.controller;
 
 import javafx.embed.swing.SwingFXUtils;
@@ -44,7 +43,6 @@ import java.util.function.IntConsumer;
 import java.util.function.IntSupplier;
 import java.util.function.Supplier;
 
-
 /**
  * Handles maze file operations:
  * - Saving and loading .maze files.
@@ -53,56 +51,36 @@ import java.util.function.Supplier;
  * The application remains responsible for owning the current grid.
  */
 public final class MazeFileManager {
-
     private static final double CANVAS_SIZE = 600.0;
-
     private static final double GEOMETRY_PADDING = 22.0;
-
 
     // --------------------------------------------------
     // DEPENDENCIES
     // --------------------------------------------------
 
     public record Dependencies(
-
             Stage owner,
-
             MazeCanvas mazeCanvas,
-
             Supplier<MazeGrid> gridSupplier,
-
             Consumer<MazeGrid> gridConsumer,
-
             ComboBox<TopologyType> shapeCombo,
-
             ToggleButton themeToggle,
-
             BooleanSupplier fogOfWarActive,
-
             IntSupplier fogRadius,
-
             IntConsumer updateStatistics,
-
             Button exportButton,
-
             Button saveMazeButton,
-
             Button loadMazeButton,
-
             Runnable fallbackGeneration
-
     ) { }
 
-
     private final Dependencies dependencies;
-
 
     // --------------------------------------------------
     // CONSTRUCTOR
     // --------------------------------------------------
 
     public MazeFileManager(Dependencies dependencies) {
-
         this.dependencies = java.util.Objects.requireNonNull(
                 dependencies,
                 "File manager dependencies cannot be null."
@@ -117,38 +95,22 @@ public final class MazeFileManager {
     // --------------------------------------------------
 
     private void initializeActions() {
-
-        dependencies.exportButton().setOnAction(
-                event -> exportMazeImage()
-        );
-
-        dependencies.saveMazeButton().setOnAction(
-                event -> saveLabyrinthFile()
-        );
-
-        dependencies.loadMazeButton().setOnAction(
-                event -> loadLabyrinthFile()
-        );
+        dependencies.exportButton().setOnAction(event -> exportMazeImage());
+        dependencies.saveMazeButton().setOnAction(event -> saveLabyrinthFile());
+        dependencies.loadMazeButton().setOnAction(event -> loadLabyrinthFile());
     }
-
 
     // ==================================================
     // IMAGE EXPORT
     // ==================================================
 
     private void exportMazeImage() {
-
-        MazeCanvas mazeCanvas =
-                dependencies.mazeCanvas();
-
-        MazeGrid grid =
-                dependencies.gridSupplier().get();
-
+        MazeCanvas mazeCanvas = dependencies.mazeCanvas();
+        MazeGrid grid = dependencies.gridSupplier().get();
 
         // VALIDATE CANVAS
 
         if (mazeCanvas == null || grid == null) {
-
             new Alert(
                     Alert.AlertType.WARNING,
                     "No maze canvas available to export.",
@@ -158,34 +120,16 @@ public final class MazeFileManager {
             return;
         }
 
-
         try {
-
             // --------------------------------------------------
             // CHOOSE IMAGE FORMAT
             // --------------------------------------------------
 
-            ChoiceDialog<String> formatDialog =
-                    new ChoiceDialog<>(
-                            "PNG",
-                            "PNG",
-                            "JPG"
-                    );
-
-            formatDialog.setTitle(
-                    "Export Image Format"
-            );
-
-            formatDialog.setHeaderText(
-                    "Choose Image Export Format"
-            );
-
-            formatDialog.setContentText(
-                    "Format:"
-            );
-
-            Optional<String> result =
-                    formatDialog.showAndWait();
+            ChoiceDialog<String> formatDialog = new ChoiceDialog<>("PNG", "PNG", "JPG");
+            formatDialog.setTitle("Export Image Format");
+            formatDialog.setHeaderText("Choose Image Export Format");
+            formatDialog.setContentText("Format:");
+            Optional<String> result = formatDialog.showAndWait();
 
             if (result.isEmpty()) {
                 return;
@@ -193,19 +137,14 @@ public final class MazeFileManager {
 
             String format = result.get();
 
-
             // --------------------------------------------------
             // FILE CHOOSER
             // --------------------------------------------------
 
             FileChooser fileChooser = new FileChooser();
-
-            fileChooser.setTitle(
-                    "Save Maze Image (" + format + ")"
-            );
+            fileChooser.setTitle("Save Maze Image (" + format + ")");
 
             if ("JPG".equalsIgnoreCase(format)) {
-
                 fileChooser.getExtensionFilters().add(
                         new FileChooser.ExtensionFilter(
                                 "JPG Image (*.jpg)",
@@ -213,12 +152,9 @@ public final class MazeFileManager {
                         )
                 );
 
-                fileChooser.setInitialFileName(
-                        "maze.jpg"
-                );
+                fileChooser.setInitialFileName("maze.jpg");
 
             } else {
-
                 fileChooser.getExtensionFilters().add(
                         new FileChooser.ExtensionFilter(
                                 "PNG Image (*.png)",
@@ -226,20 +162,14 @@ public final class MazeFileManager {
                         )
                 );
 
-                fileChooser.setInitialFileName(
-                        "maze.png"
-                );
+                fileChooser.setInitialFileName("maze.png");
             }
 
-
-            File file = fileChooser.showSaveDialog(
-                    dependencies.owner()
-            );
+            File file = fileChooser.showSaveDialog(dependencies.owner());
 
             if (file == null) {
                 return;
             }
-
 
             // --------------------------------------------------
             // SNAPSHOT CANVAS
@@ -714,9 +644,12 @@ public final class MazeFileManager {
             };
 
 
-            // --------------------------------------------------
-            // APPLY GEOMETRY
-            // --------------------------------------------------
+
+// --------------------------------------------------
+// APPLY GEOMETRY
+// --------------------------------------------------
+
+            MazeCanvas canvas = dependencies.mazeCanvas();
 
             switch (topology) {
 
@@ -725,39 +658,59 @@ public final class MazeFileManager {
                     double cellSize =
                             CANVAS_SIZE / Math.max(cols, rows);
 
-                    dependencies.mazeCanvas().setWidth(
-                            cols * cellSize
-                    );
-
-                    dependencies.mazeCanvas().setHeight(
+                    // Preserve the rectangular aspect ratio.
+                    canvas.resizeCanvas(
+                            cols * cellSize,
                             rows * cellSize
                     );
                 }
 
-                case CIRCULAR ->
+                case CIRCULAR -> {
 
-                        loadedGrid.layoutCircularGrid(
-                                CANVAS_SIZE,
-                                CANVAS_SIZE,
-                                GEOMETRY_PADDING
-                        );
+                    // Reset canvas to a square workspace.
+                    canvas.resizeCanvas(
+                            CANVAS_SIZE,
+                            CANVAS_SIZE
+                    );
 
-                case HEXAGONAL ->
+                    loadedGrid.layoutCircularGrid(
+                            canvas.getWidth(),
+                            canvas.getHeight(),
+                            GEOMETRY_PADDING
+                    );
+                }
 
-                        loadedGrid.layoutHexagonalGrid(
-                                CANVAS_SIZE,
-                                CANVAS_SIZE,
-                                GEOMETRY_PADDING
-                        );
+                case HEXAGONAL -> {
 
-                case TRIANGULAR ->
+                    // Reset canvas to a square workspace.
+                    canvas.resizeCanvas(
+                            CANVAS_SIZE,
+                            CANVAS_SIZE
+                    );
 
-                        loadedGrid.layoutTriangularGrid(
-                                CANVAS_SIZE,
-                                CANVAS_SIZE,
-                                GEOMETRY_PADDING
-                        );
+                    loadedGrid.layoutHexagonalGrid(
+                            canvas.getWidth(),
+                            canvas.getHeight(),
+                            GEOMETRY_PADDING
+                    );
+                }
+
+                case TRIANGULAR -> {
+
+                    // Reset canvas to a square workspace.
+                    canvas.resizeCanvas(
+                            CANVAS_SIZE,
+                            CANVAS_SIZE
+                    );
+
+                    loadedGrid.layoutTriangularGrid(
+                            canvas.getWidth(),
+                            canvas.getHeight(),
+                            GEOMETRY_PADDING
+                    );
+                }
             }
+
 
 
             // --------------------------------------------------
@@ -856,9 +809,6 @@ public final class MazeFileManager {
             // --------------------------------------------------
             // UPDATE CANVAS
             // --------------------------------------------------
-
-            MazeCanvas canvas =
-                    dependencies.mazeCanvas();
 
             canvas.setGrid(loadedGrid);
 
