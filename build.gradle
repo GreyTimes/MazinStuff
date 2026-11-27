@@ -30,7 +30,7 @@ javadoc {
 }
 
 application {
-    mainClass = 'app.MazinStuffLauncher'
+    mainClass = 'com.greytimes.mazinstuff.app.MazinStuffLauncher'
     applicationName = 'MazinStuff'
 }
 
