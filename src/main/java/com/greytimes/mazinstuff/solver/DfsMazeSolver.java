@@ -17,9 +17,12 @@ import java.util.logging.Logger;
 /** Depth-first path search over open graph edges with robust error guards. */
 public final class DfsMazeSolver implements MazeSolver {
     private static final Logger LOGGER = Logger.getLogger(DfsMazeSolver.class.getName());
+    private int nodesVisited;
 
     @Override
     public List<Cell> solve(MazeGrid grid) {
+        nodesVisited = 0;
+
         if (grid == null) {
             LOGGER.warning("DFS Solver received a null grid.");
             return null;
@@ -34,6 +37,7 @@ public final class DfsMazeSolver implements MazeSolver {
                 return null;
             }
             if (start == target) {
+                nodesVisited = 1;
                 return Collections.singletonList(start);
             }
 
@@ -46,9 +50,12 @@ public final class DfsMazeSolver implements MazeSolver {
 
             while (!stack.isEmpty()) {
                 Cell current = stack.pop();
+
                 if (current == null) {
                     continue;
                 }
+
+                nodesVisited++;
 
                 if (current == target) {
                     List<Cell> path = new ArrayList<>();
@@ -79,5 +86,10 @@ public final class DfsMazeSolver implements MazeSolver {
             LOGGER.log(Level.SEVERE, "Unexpected error during DFS maze solving: " + ex.getMessage(), ex);
             return null;
         }
+    }
+
+    @Override
+    public int getNodesVisited() {
+        return nodesVisited;
     }
 }

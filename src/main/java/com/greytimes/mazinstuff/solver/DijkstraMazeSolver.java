@@ -3,13 +3,7 @@ package com.greytimes.mazinstuff.solver;
 import com.greytimes.mazinstuff.model.grid.Cell;
 import com.greytimes.mazinstuff.model.grid.MazeGrid;
 
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.Comparator;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.PriorityQueue;
+import java.util.*;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
@@ -19,6 +13,7 @@ import java.util.logging.Logger;
  */
 public final class DijkstraMazeSolver implements MazeSolver {
     private static final Logger LOGGER = Logger.getLogger(DijkstraMazeSolver.class.getName());
+    private int nodesVisited;
 
     private static final class QueueNode {
         private final Cell cell;
@@ -32,6 +27,8 @@ public final class DijkstraMazeSolver implements MazeSolver {
 
     @Override
     public List<Cell> solve(MazeGrid grid) {
+        nodesVisited = 0;
+
         if (grid == null) {
             LOGGER.warning("Dijkstra Solver received a null grid.");
             return null;
@@ -46,11 +43,13 @@ public final class DijkstraMazeSolver implements MazeSolver {
                 return null;
             }
             if (start == target) {
+                nodesVisited = 1;
                 return Collections.singletonList(start);
             }
 
             Map<Cell, Double> distances = new HashMap<>();
             Map<Cell, Cell> parent = new HashMap<>();
+            Set<Cell> settled = new HashSet<>();
 
             PriorityQueue<QueueNode> queue = new PriorityQueue<>(Comparator.comparingDouble(node -> node.distance));
 
@@ -76,9 +75,17 @@ public final class DijkstraMazeSolver implements MazeSolver {
                 }
 
                 Double currentDistance = distances.get(current);
+
                 if (currentDistance == null || node.distance > currentDistance) {
                     continue;
                 }
+
+                if (!settled.add(current)) {
+                    continue;
+                }
+
+                nodesVisited++;
+
                 if (current == target) {
                     break;
                 }
@@ -126,6 +133,11 @@ public final class DijkstraMazeSolver implements MazeSolver {
             LOGGER.log(Level.SEVERE, "Unexpected error during Dijkstra maze solving: " + ex.getMessage(), ex);
             return null;
         }
+    }
+
+    @Override
+    public int getNodesVisited() {
+        return nodesVisited;
     }
 
     private static double centerDistance(Cell a, Cell b) {

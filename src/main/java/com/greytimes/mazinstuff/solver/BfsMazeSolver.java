@@ -18,10 +18,12 @@ import java.util.logging.Logger;
 /** Breadth-first shortest path measured in number of cell-to-cell moves. */
 public final class BfsMazeSolver implements MazeSolver {
     private static final Logger LOGGER = Logger.getLogger(BfsMazeSolver.class.getName());
-
+    private int nodesVisited;
 
     @Override
     public List<Cell> solve(MazeGrid grid) {
+        nodesVisited = 0;
+
         if (grid == null) {
             LOGGER.warning("Solver received a null grid.");
             return null;
@@ -36,6 +38,7 @@ public final class BfsMazeSolver implements MazeSolver {
                 return null;
             }
             if (start == target) {
+                nodesVisited = 1;
                 return Collections.singletonList(start);
             }
 
@@ -48,9 +51,12 @@ public final class BfsMazeSolver implements MazeSolver {
 
             while (!queue.isEmpty()) {
                 Cell current = queue.remove();
+
                 if (current == null) {
                     continue;
                 }
+
+                nodesVisited++;
 
                 if (current == target) {
                     return reconstructPath(parent, target);
@@ -76,6 +82,11 @@ public final class BfsMazeSolver implements MazeSolver {
             LOGGER.log(Level.SEVERE, "Unexpected error during BFS maze solving: " + ex.getMessage(), ex);
             return null;
         }
+    }
+
+    @Override
+    public int getNodesVisited() {
+        return nodesVisited;
     }
 
     static List<Cell> reconstructPath(Map<Cell, Cell> parent, Cell target) {

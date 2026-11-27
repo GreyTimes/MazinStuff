@@ -90,16 +90,12 @@ public class BenchmarkRunner {
                             long endGen = System.nanoTime();
                             totalGenTime += (endGen - startGen) / 1_000_000;
 
-                            for (Cell c : grid.getAllCells()) {
-                                c.visited = false;
-                            }
-
                             long startSolve = System.nanoTime();
                             List<Cell> path = solver.solve(grid);
                             long endSolve = System.nanoTime();
                             totalSolveTime += (endSolve - startSolve) / 1_000_000;
 
-                            int nodesVisited = countVisitedNodes(grid);
+                            int nodesVisited = solver.getNodesVisited();
                             int pathLen = (path != null) ? path.size() : 0;
                             int reachable = countReachableCells(grid);
 
@@ -130,16 +126,6 @@ public class BenchmarkRunner {
             }
         }
         return results;
-    }
-
-    private static int countVisitedNodes(MazeGrid grid) {
-        int count = 0;
-        for (Cell c : grid.getAllCells()) {
-            if (c.visited) {
-                count++;
-            }
-        }
-        return Math.max(1, count);
     }
 
     private static int countReachableCells(MazeGrid grid) {
