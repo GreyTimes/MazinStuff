@@ -7,16 +7,24 @@ import java.util.List;
 
 /**
  * Common interface for maze-solving algorithms.
- *
- * Implementations return an ordered path from entrance to exit.
  */
 public interface MazeSolver {
 
     /**
-     * Finds a path through the maze.
+     * Finds a path from the maze entrance to its exit.
      *
      * @param grid maze to solve
-     * @return ordered path, or null if no valid path can be found
+     * @return ordered path, or null if no valid path exists
      */
     List<Cell> solve(MazeGrid grid);
+
+    /**
+     * Returns the number of unique cells processed during
+     * the most recent solve operation.
+     *
+     * Includes the entrance and the exit when processed.
+     *
+     * @return number of processed cells
+     */
+    int getNodesVisited();
 }
