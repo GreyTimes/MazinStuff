@@ -37,7 +37,7 @@ public class AldousBroderMazeGenerator implements MazeGenerator {
 
         List<Cell> cells = grid.getAllCells();
         this.unvisitedCount = cells.size();
-        this.current = cells.get(random.nextInt(cells.size()));
+        this.current = cells.get(this.random.nextInt(cells.size()));
         current.visited = true;
         unvisitedCount--;
     }

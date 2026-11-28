@@ -38,7 +38,7 @@ public class PrimsMazeGenerator implements MazeGenerator {
             }
         }
 
-        Cell start = cells.get(random.nextInt(cells.size()));
+        Cell start = cells.get(this.random.nextInt(cells.size()));
         if (start != null) {
             start.visited = true;
             addFrontierCells(start);
